@@ -22,15 +22,15 @@ class Trader:
 
         self.contract_sizes = self.df['close'].apply(lambda x: trade_size_dollars / x)
         self.trade_history = []
-        self.trade_history_columns = ['index', 'entry_price', 'exit_price', 'type', 'contracts', 'profit_loss']
+        self.trade_history_columns = ['index', 'entry_price', 'exit_price', 'type', 'contracts', 'profit_loss', 'sharpe_ratio']
 
-    def step(self, action: int) -> Tuple[float, bool]:
+    def step(self, action: int) -> Tuple[float, bool, float]:
         results = 0
         done = False
 
         if self.current_capital <= self.trade_size_dollars:
             done = True
-            return -100000, done
+            return -100000, done, self.calculate_sharpe_ratio()
 
         position_contracts = self.contract_sizes[self.current_index]
 
@@ -45,24 +45,43 @@ class Trader:
         if self.current_index >= len(self.df):
             done = True
 
+        sharpe_ratio = self.calculate_sharpe_ratio()
         self.current_capital += results
-        return results, done
+        return results, done, sharpe_ratio
     
     def get_trade_history_df(self) -> pd.DataFrame:
         """Converts the trade history list to a DataFrame."""
         return pd.DataFrame(self.trade_history, columns=self.trade_history_columns)
     
+    def calculate_sharpe_ratio(self, risk_free_rate=0.02, window_size=None) -> float:
+        if not self.trade_history:
+            return 0
+
+        recent_trades = self.trade_history[-window_size:] if window_size else self.trade_history
+
+        returns = [trade['profit_loss'] / trade['entry_price'] for trade in recent_trades if trade['profit_loss'] is not np.nan]
+
+        if not returns:
+            return 0
+
+        mean_return = np.mean(returns)
+        std_dev = np.std(returns)
+
+        sharpe_ratio = (mean_return - risk_free_rate) / std_dev if std_dev else 0
+        return float(sharpe_ratio)
+
     def __open_position(self, position_type: str, position_contracts: float):
         self.position = TradePosition(position_type, self.df.iloc[self.current_index]['close'], position_contracts)
-        # Add the opening of a position to the trade history list
-        self.trade_history.append([
-            self.current_index,
-            self.df.iloc[self.current_index]['close'],
-            np.nan,
-            position_type,
-            position_contracts,
-            np.nan
-        ])
+        self.trade_history.append({
+            'index': self.current_index,
+            'entry_price': self.df.iloc[self.current_index]['close'],
+            'exit_price': np.nan,
+            'type': position_type,
+            'contracts': position_contracts,
+            'profit_loss': np.nan,
+            'sharpe_ratio': np.nan
+        })
+
 
     def __close_position(self) -> float:
         if not self.position.is_open():
@@ -75,8 +94,9 @@ class Trader:
             profit_loss = (self.position.entry_price - exit_price) * self.position.contracts
 
         self.position = TradePosition()
-        self.trade_history[-1][2] = self.df.iloc[self.current_index]['close']  # Update exit price
-        self.trade_history[-1][5] = profit_loss  # Update profit/loss
+        self.trade_history[-1]['exit_price'] = self.df.iloc[self.current_index]['close']
+        self.trade_history[-1]['profit_loss'] = profit_loss
+        self.trade_history[-1]['sharpe_ratio'] = self.calculate_sharpe_ratio()
         return profit_loss
 
     def __handle_long_trade(self, position_contracts: float) -> float:
