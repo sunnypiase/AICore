@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from typing import Tuple
+from typing import List, Tuple
 
 class TradePosition:
     def __init__(self, position_type: str = "", entry_price: float = 0, contracts: float = 0):
@@ -9,123 +9,118 @@ class TradePosition:
         self.contracts = contracts
 
     def is_open(self) -> bool:
-        return self.position_type == "long" or  self.position_type == "short"
+        return self.position_type in ["long", "short"]
 
 class Trader:
     def __init__(self, df: pd.DataFrame, trade_size_dollars: float, initial_capital: float) -> None:
-        self.df = df
+        self.close_prices = df['close'].values  # Convert to NumPy array
         self.trade_size_dollars = trade_size_dollars
         self.initial_capital = initial_capital
         self.current_capital = initial_capital
         self.position = TradePosition()
         self.current_index = 0
-
-        self.contract_sizes = self.df['close'].apply(lambda x: trade_size_dollars / x)
+        self.contract_sizes = trade_size_dollars / df['close']  # Use the NumPy array
         self.trade_history = []
-        self.trade_history_columns = ['index', 'entry_price', 'exit_price', 'type', 'contracts', 'profit_loss', 'sharpe_ratio']
 
-    def step(self, action: int) -> Tuple[float, bool, float]:
-        results = 0
-        done = False
 
-        if self.current_capital <= self.trade_size_dollars:
-            done = True
-            return -100000, done, self.calculate_sharpe_ratio()
+    def trade(self, actions: List[int]) -> None:
+        # Convert contract sizes to a numpy array for faster access
+        contract_sizes_np = self.contract_sizes.values
 
-        position_contracts = self.contract_sizes[self.current_index]
+        for i, action in enumerate(actions):
+            self.current_index = i
+            if self.current_capital <= self.trade_size_dollars:
+                break
 
-        if action == 0:
-            results = self.__handle_long_trade(position_contracts)
-        elif action == 1:
-            results = self.__wait()
-        elif action == 2: 
-            results = self.__handle_short_trade(position_contracts)
+            position_contracts = contract_sizes_np[self.current_index]
 
-        self.current_index += 1
-        if self.current_index >= len(self.df):
-            done = True
+            # Inline the handle_trade logic for long and short
+            if action == 0 or action == 2:
+                position_type = "long" if action == 0 else "short"
+                if self.position.is_open():
+                    if self.position.position_type != position_type:
+                        profit_loss = self.close_position()
+                        self.open_position(position_type, position_contracts)
+                        self.current_capital += profit_loss
+                else:
+                    self.open_position(position_type, position_contracts)
+            
 
-        sharpe_ratio = self.calculate_sharpe_ratio()
-        self.current_capital += results
-        return results, done, sharpe_ratio
     
     def get_trade_history_df(self) -> pd.DataFrame:
-        """Converts the trade history list to a DataFrame."""
-        return pd.DataFrame(self.trade_history, columns=self.trade_history_columns)
+        return pd.DataFrame(self.trade_history)
+
     
     def calculate_sharpe_ratio(self, risk_free_rate=0.02, window_size=None) -> float:
         if not self.trade_history:
-            return 0
+            return -100
 
+        # Extract recent trades based on window_size
         recent_trades = self.trade_history[-window_size:] if window_size else self.trade_history
 
-        returns = [trade['profit_loss'] / trade['entry_price'] for trade in recent_trades if trade['profit_loss'] is not np.nan]
+        # Filter out trades with 'nan' profit_loss
+        filtered_trades = [trade for trade in recent_trades if trade['profit_loss'] is not np.nan]
 
-        if not returns:
+        if not filtered_trades:
+            return -100
+
+        # Calculate returns using list comprehension
+        returns = [(trade['profit_loss'] / trade['entry_price']) if trade['type'] == 'long'
+                    else (-trade['profit_loss'] / trade['entry_price']) for trade in filtered_trades]
+
+        # Convert to NumPy array for efficient calculation
+        returns_np = np.array(returns)
+
+        mean_return = np.mean(returns_np)
+        std_dev = np.std(returns_np)
+
+        if std_dev == 0:
+            return -100
+
+        return float((mean_return - risk_free_rate) / std_dev)
+
+
+    def handle_trade(self, position_type: str, position_contracts: float) -> float:
+        if self.position.is_open():
+            if self.position.position_type != position_type:
+                profit_loss = self.close_position()
+                self.open_position(position_type, position_contracts)
+                return profit_loss
+            return 0
+        else:
+            self.open_position(position_type, position_contracts)
             return 0
 
-        mean_return = np.mean(returns)
-        std_dev = np.std(returns)
-
-        sharpe_ratio = (mean_return - risk_free_rate) / std_dev if std_dev else 0
-        return float(sharpe_ratio)
-
-    def __open_position(self, position_type: str, position_contracts: float):
-        self.position = TradePosition(position_type, self.df.iloc[self.current_index]['close'], position_contracts)
+    def open_position(self, position_type: str, position_contracts: float):
+        entry_price = self.close_prices[self.current_index]
+        self.position = TradePosition(position_type, entry_price, position_contracts)
+        # Append a dictionary to the trade history list
         self.trade_history.append({
             'index': self.current_index,
-            'entry_price': self.df.iloc[self.current_index]['close'],
+            'entry_price': entry_price,
             'exit_price': np.nan,
             'type': position_type,
             'contracts': position_contracts,
-            'profit_loss': np.nan,
-            'sharpe_ratio': np.nan
+            'profit_loss': np.nan
         })
 
 
-    def __close_position(self) -> float:
+    def close_position(self) -> float:
         if not self.position.is_open():
             return 0
-        exit_price = self.df.iloc[self.current_index]['close']
 
-        if self.position.position_type == "long":
-            profit_loss = (exit_price - self.position.entry_price) * self.position.contracts
-        elif self.position.position_type == "short":
-            profit_loss = (self.position.entry_price - exit_price) * self.position.contracts
-
+        exit_price = self.close_prices[self.current_index]
+        profit_loss = self.calculate_profit_loss(exit_price)
+        last_trade = self.trade_history[-1]
+        last_trade['exit_price'] = exit_price
+        last_trade['profit_loss'] = profit_loss
+        last_trade['close_index'] = self.current_index
         self.position = TradePosition()
-        self.trade_history[-1]['exit_price'] = self.df.iloc[self.current_index]['close']
-        self.trade_history[-1]['profit_loss'] = profit_loss
-        self.trade_history[-1]['sharpe_ratio'] = self.calculate_sharpe_ratio()
         return profit_loss
 
-    def __handle_long_trade(self, position_contracts: float) -> float:
-        if self.position.is_open() and self.position.position_type == "long":
-            # Already in a long position; no new action taken
-            return 0
-        elif self.position.is_open() and self.position.position_type == "short":
-            # In a short position, close it before opening a new long position
-            results = self.__close_position()
-            self.__open_position("long", position_contracts)
-            return results
-        else:
-            # Not in a position, open a new long position
-            self.__open_position("long", position_contracts)
-        return 0
-
-    def __handle_short_trade(self, position_contracts: float) -> float:
-        if self.position.is_open() and self.position.position_type == "short":
-            # Already in a short position; no new action taken
-            return 0
-        elif self.position.is_open() and self.position.position_type == "long":
-            # In a long position, close it before opening a new short position
-            results = self.__close_position()
-            self.__open_position("short", position_contracts)
-            return results
-        else:
-            # Not in a position, open a new short position
-            self.__open_position("short", position_contracts)
-        return 0
-
-    def __wait(self) -> float:
+    def calculate_profit_loss(self, exit_price: float) -> float:
+        if self.position.position_type == "long":
+            return (exit_price - self.position.entry_price) * self.position.contracts
+        elif self.position.position_type == "short":
+            return (self.position.entry_price - exit_price) * self.position.contracts
         return 0
