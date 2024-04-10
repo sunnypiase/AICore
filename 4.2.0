@@ -1,0 +1,29 @@
+Collecting nbformat
+  Downloading nbformat-5.10.3-py3-none-any.whl.metadata (3.6 kB)
+Collecting fastjsonschema (from nbformat)
+  Using cached fastjsonschema-2.19.1-py3-none-any.whl.metadata (2.1 kB)
+Collecting jsonschema>=2.6 (from nbformat)
+  Using cached jsonschema-4.21.1-py3-none-any.whl.metadata (7.8 kB)
+Requirement already satisfied: jupyter-core in c:\users\sunny piase\appdata\roaming\python\python312\site-packages (from nbformat) (5.7.1)
+Requirement already satisfied: traitlets>=5.1 in c:\users\sunny piase\appdata\roaming\python\python312\site-packages (from nbformat) (5.14.1)
+Collecting attrs>=22.2.0 (from jsonschema>=2.6->nbformat)
+  Using cached attrs-23.2.0-py3-none-any.whl.metadata (9.5 kB)
+Collecting jsonschema-specifications>=2023.03.6 (from jsonschema>=2.6->nbformat)
+  Using cached jsonschema_specifications-2023.12.1-py3-none-any.whl.metadata (3.0 kB)
+Collecting referencing>=0.28.4 (from jsonschema>=2.6->nbformat)
+  Downloading referencing-0.34.0-py3-none-any.whl.metadata (2.8 kB)
+Collecting rpds-py>=0.7.1 (from jsonschema>=2.6->nbformat)
+  Downloading rpds_py-0.18.0-cp312-none-win_amd64.whl.metadata (4.2 kB)
+Requirement already satisfied: platformdirs>=2.5 in c:\users\sunny piase\appdata\roaming\python\python312\site-packages (from jupyter-core->nbformat) (4.2.0)
+Requirement already satisfied: pywin32>=300 in c:\users\sunny piase\appdata\roaming\python\python312\site-packages (from jupyter-core->nbformat) (306)
+Downloading nbformat-5.10.3-py3-none-any.whl (78 kB)
+   ---------------------------------------- 0.0/78.4 kB ? eta -:--:--   ----- ---------------------------------- 10.2/78.4 kB ? eta -:--:--   ---------------------------------------- 78.4/78.4 kB 1.1 MB/s eta 0:00:00
+Using cached jsonschema-4.21.1-py3-none-any.whl (85 kB)
+Using cached fastjsonschema-2.19.1-py3-none-any.whl (23 kB)
+Using cached attrs-23.2.0-py3-none-any.whl (60 kB)
+Using cached jsonschema_specifications-2023.12.1-py3-none-any.whl (18 kB)
+Downloading referencing-0.34.0-py3-none-any.whl (26 kB)
+Downloading rpds_py-0.18.0-cp312-none-win_amd64.whl (206 kB)
+   ---------------------------------------- 0.0/206.3 kB ? eta -:--:--   --------------------------- ------------ 143.4/206.3 kB 2.8 MB/s eta 0:00:01   ---------------------------------------- 206.3/206.3 kB 4.2 MB/s eta 0:00:00
+Installing collected packages: fastjsonschema, rpds-py, attrs, referencing, jsonschema-specifications, jsonschema, nbformat
+Successfully installed attrs-23.2.0 fastjsonschema-2.19.1 jsonschema-4.21.1 jsonschema-specifications-2023.12.1 nbformat-5.10.3 referencing-0.34.0 rpds-py-0.18.0
